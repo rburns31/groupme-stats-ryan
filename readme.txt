@@ -1,0 +1,1 @@
+StatCollector needs the simple json library to run. You can add it in Eclipse by right clicking on the project, Build Path, Add External Archive, then browse to the simple json file included and add it. This should allow you to run the program if you put in the credentials
