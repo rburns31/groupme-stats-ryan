@@ -1,27 +1,17 @@
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
- 
 
-import java.text.DecimalFormat;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.Set;
-
-import javax.net.ssl.HttpsURLConnection;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
- 
+
 public class StoreMessages {
 	private final String USER_AGENT = "Mozilla/5.0";
 	private final String CURRENT_GROUP = "25931103";
@@ -34,7 +24,7 @@ public class StoreMessages {
 		ArrayList<String> allMessages = http.getAllMessages();
 		PrintWriter writer = new PrintWriter("daniceMessages.txt", "UTF-8");
 		Iterator<String> iter = allMessages.iterator();
-		while(iter.hasNext()){
+		while(iter.hasNext()) {
 			writer.println(iter.next());
 		}
 		writer.close();
@@ -43,6 +33,7 @@ public class StoreMessages {
 	/*
 	 * Calculates the likes of all messages in the group
 	 */
+	@SuppressWarnings("unchecked")
 	private ArrayList<String> getAllMessages() throws Exception {
 		
 		ArrayList<String> allMessages = new ArrayList<String>();
@@ -99,11 +90,11 @@ public class StoreMessages {
 			System.out.println(count);
 
 			JSONArray messages = (JSONArray) responses.get("messages");
-			Iterator iterator = messages.iterator();
+			Iterator<JSONObject> iterator = messages.iterator();
 			
 			//Go through each message
 			while(iterator.hasNext() && count > 0) {
-				JSONObject message = (JSONObject) iterator.next();
+				JSONObject message = iterator.next();
 				lastMessageID = (String) message.get("id");
 				String text = (String) message.get("text");
 				long date = (long) message.get("created_at");
