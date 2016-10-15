@@ -3,9 +3,13 @@ import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -31,8 +35,8 @@ public class StatCollector {
 	private static final JSONParser PARSER = new JSONParser();
 	private static final String USER_AGENT = "Mozilla/5.0";	
 	private static final String BOT_ID = "58e3406f09337706ed30dc3872";
-	private static final String GROUP_ID = "25931103"; //TestGroup
-	//private final String GROUP_ID = "18189190"; //MainChat
+	//private static final String GROUP_ID = "25931103"; //TestGroup
+	private static final String GROUP_ID = "18189190"; //MainChat
 	private static final String ACCESS_TOKEN = "gsg4UrfDIZuRSDQxXAkkIF1033u9LDYpuDeK6b1h";
 
 	@SuppressWarnings("unchecked")
@@ -40,12 +44,13 @@ public class StatCollector {
 		long startTime = System.currentTimeMillis();
 
 		String urlParameters = "";
-		Long count = new Long(-1);
-		Long totalMessages = new Long(-1);
+		Long count = Long.MAX_VALUE;
+		Long totalMessages = Long.MAX_VALUE;
 		Map<String, Double> likes = new HashMap<>();
 		Map<String, Double> comments = new HashMap<>();
 
-		while (!count.equals(new Long(0))) {
+		while (count.compareTo(new Long(0)) > 0) {
+			System.out.println(count);
 			URL url = new URL("https://api.groupme.com/v3/groups/" + GROUP_ID
 					+ "/messages?token=" + ACCESS_TOKEN + urlParameters);
 
@@ -63,10 +68,15 @@ public class StatCollector {
 
 			String lastMessageID = "";
 
-			JSONObject data = (JSONObject) PARSER.parse(response.toString());
+			JSONObject data;
+			try {
+				data = (JSONObject) PARSER.parse(response.toString());
+			} catch (Exception e) {
+				break;
+			}
 			JSONObject responses = (JSONObject) data.get("response");
 
-			if (count == -1) {
+			if (count.equals(Long.MAX_VALUE)) {
 				count = (Long) responses.get("count");
 				totalMessages = (Long) responses.get("count");
 			}
@@ -107,23 +117,32 @@ public class StatCollector {
 		}
 
 		// Calculate the like to comment ratios for everyone
-		HashMap<String, Double> ratios = new HashMap<String, Double>();
+		Map<String, Double> ratios = new HashMap<String, Double>();
 		for (String name: comments.keySet()) {
 			Double numLikes = likes.get(name);
 			Double numComments = comments.get(name);
 			ratios.put(name, numLikes != null ? ((double) numLikes) / numComments : 0);
 		}
+
+		likes = combineNames(likes);
+		likes = sortByValue(likes);
 		
+		comments = combineNames(comments);
+		comments = sortByValue(comments);
+		
+		ratios = combineNames(ratios);
+		ratios = sortByValue(ratios);
+
 		System.out.println("Likes: " + likes.toString());
 		System.out.println("Comments: " + comments.toString());
 		System.out.println("Ratios: " + ratios.toString());
 
-		System.out.println("Processed " + totalMessages + " messages in " + (System.currentTimeMillis()- startTime) / 1000 + " seconds");
+		System.out.println("\nProcessed " + totalMessages + " messages in " + (System.currentTimeMillis()- startTime) / 1000 + " seconds");
 
-		postResults(likes, "\nTotal Likes:\n");
-		postResults(ratios, "\nLikes per Comment:\n");
+		//postResults(likes, "\nTotal Likes:\n");
+		//postResults(ratios, "\nLikes per Comment:\n");
 	}
-	
+
 	/**
 	 * Takes in the hashmap with corresponding likes and posts it to the group
 	 */
@@ -152,5 +171,54 @@ public class StatCollector {
 		System.out.println("\nSending 'POST' request to URL : " + url);
 		System.out.println("Post parameters : " + urlParameters);
 		System.out.println("Response Code : " + responseCode);
+	}
+
+	/**
+	 * 
+	 * @param input
+	 * @return
+	 */
+	private static Map<String, Double> combineNames(Map<String, Double> input) {
+		Map<String, Double> output = new HashMap<>();
+		output.put("Ryan", 0.0);
+		output.put("Aaron", 0.0);
+		output.put("Ian", 0.0);
+		output.put("James", 0.0);
+		output.put("Anthony", 0.0);
+		output.put("Alex", 0.0);
+		output.put("Daniel", 0.0);
+		output.put("Matt", 0.0);
+		output.put("Nick", 0.0);
+
+		for (String trimmedName: output.keySet()) {
+			for (String originalName: input.keySet()) {
+				if (originalName.contains(trimmedName)) {
+					output.put(trimmedName, output.get(trimmedName) + input.get(originalName));
+				}
+			}
+		}
+		output.put("Nick", output.get("Nick") + input.get("Kramer"));
+		
+		return output;
+	}
+
+	/**
+	 * Taken from http://stackoverflow.com/questions/109383/sort-a-mapkey-value-by-values-java
+	 * @param map
+	 * @return
+	 */
+	private static <K, V extends Comparable<? super V>> Map<K, V> sortByValue(Map<K, V> map) {
+		List<Map.Entry<K, V>> list = new LinkedList<Map.Entry<K, V>>(map.entrySet());
+		Collections.sort(list, new Comparator<Map.Entry<K, V>>() {
+			public int compare( Map.Entry<K, V> o1, Map.Entry<K, V> o2) {
+				return (o2.getValue()).compareTo(o1.getValue());
+			}
+		});
+
+		Map<K, V> result = new LinkedHashMap<K, V>();
+		for (Map.Entry<K, V> entry: list) {
+			result.put(entry.getKey(), entry.getValue());
+    	}
+    	return result;
 	}
 }
