@@ -3,14 +3,7 @@ import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -32,10 +25,12 @@ import org.json.simple.parser.JSONParser;
 public class StatCollector {
     private static final JSONParser PARSER = new JSONParser();
     private static final String USER_AGENT = "Mozilla/5.0";
-    private static final String BOT_ID = "58e3406f09337706ed30dc3872";
+    //private static final String BOT_ID = "58e3406f09337706ed30dc3872"; // MainChat
+    private static final String BOT_ID = "098c1562a9131c63a182f5a6d9"; // WorkChat
     // private static final String GROUP_ID = "25931103"; //TestGroup
-    private static final String GROUP_ID = "18189190"; // MainChat
-    private static final String ACCESS_TOKEN = "gsg4UrfDIZuRSDQxXAkkIF1033u9LDYpuDeK6b1h";
+    // private static final String GROUP_ID = "18189190"; // MainChat
+    private static final String GROUP_ID = "49864025"; // WorkChat
+    private static final String ACCESS_TOKEN = "rP8PR8zBp5mk5p6Kyoy6yDo6b2EGCAGdW4YB9LH3";
 
     private static final Map<String, String> userIdToName = new HashMap<>();
 
@@ -54,7 +49,15 @@ public class StatCollector {
         userIdToName.put("259682", "Ryan's Little Helper");
         userIdToName.put("20876117", "Kyle Jones");
         userIdToName.put("10084716", "Nick Kramer");
-        // userIdToName.put("", "");
+        userIdToName.put("9446852", "Bryce Rich");
+        userIdToName.put("20571181", "Katie Geeslin");
+        userIdToName.put("15905102", "David Parsons");
+        userIdToName.put("45888519", "Casey Mulroy");
+        userIdToName.put("6471992", "Cory Hutson");
+        userIdToName.put("30148103", "Peter Price");
+        userIdToName.put("26671484", "Lucy Reynolds");
+        userIdToName.put("14096462", "Nick Maguire");
+        //userIdToName.put("", "");
     }
 
     @SuppressWarnings("unchecked")
@@ -62,12 +65,14 @@ public class StatCollector {
         long startTime = System.currentTimeMillis();
 
         String urlParameters = "";
-        Long count = Long.MAX_VALUE;
-        Long totalMessages = Long.MAX_VALUE;
-        Map<String, Double> likes = new HashMap<>();
+        int count = Integer.MAX_VALUE;
+        int totalMessages = Integer.MAX_VALUE;
+        Map<String, Double> likesReceived = new HashMap<>();
         Map<String, Double> comments = new HashMap<>();
+        Map<String, Double> likesGiven = new HashMap<>();
+        Map<String, Double> selfLikes = new HashMap<>();
 
-        while (count.compareTo(new Long(0)) > 0) {
+        while (count > 0) {
             URL url = new URL("https://api.groupme.com/v3/groups/" + GROUP_ID + "/messages?token=" + ACCESS_TOKEN
                     + urlParameters);
 
@@ -76,7 +81,7 @@ public class StatCollector {
             httpConnection.setRequestProperty("User-Agent", USER_AGENT);
 
             BufferedReader in = new BufferedReader(new InputStreamReader(httpConnection.getInputStream()));
-            StringBuffer response = new StringBuffer();
+            StringBuilder response = new StringBuilder();
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
                 response.append(inputLine);
@@ -93,43 +98,42 @@ public class StatCollector {
             }
             JSONObject responses = (JSONObject) data.get("response");
 
-            if (count.equals(Long.MAX_VALUE)) {
-                count = (Long) responses.get("count");
-                totalMessages = (Long) responses.get("count");
+            if (count == Integer.MAX_VALUE) {
+                count = ((Long) responses.get("count")).intValue();
+                totalMessages = ((Long) responses.get("count")).intValue();
             }
 
             JSONArray messages = (JSONArray) responses.get("messages");
-            Iterator<JSONObject> messagesIterator = messages.iterator();
 
             // Go through each message
-            while (messagesIterator.hasNext()) {
-                JSONObject message = messagesIterator.next();
-                // String name = (String) message.get("name");
+            for (JSONObject message : (Iterable<JSONObject>) messages) {
                 String userId = (String) message.get("user_id");
                 String name = userIdToName.get(userId);
-                
+
                 if (name == null) {
-                    //System.out.println(name + " - " + (String) message.get("user_id"));
+                    System.out.println(message.get("name") + " - " + message.get("user_id"));
                     continue;
                 }
 
                 JSONArray favorites = (JSONArray) message.get("favorited_by");
-                Iterator<JSONObject> likesIterator = favorites.iterator();
 
-                // Loop through each favorite
-                while (likesIterator.hasNext()) {
-                    likesIterator.next();
+                if (likesReceived.get(name) == null) {
+                    likesReceived.put(name, (double) favorites.size());
+                } else {
+                    likesReceived.put(name, likesReceived.get(name) + favorites.size());
+                }
 
-                    if (likes.get(name) == null) {
-                        likes.put(name, 1.0);
-                    } else {
-                        likes.put(name, likes.get(name) + 1);
+                for (String favoritor : (Iterable<String>) favorites) {
+                    likesGiven.merge(favoritor, 1D, (a, b) -> a + b);
+
+                    if (favoritor.equals(userId)) {
+                        selfLikes.merge(userIdToName.get(favoritor), 1D, (a, b) -> a + b);
                     }
                 }
 
                 // Add a count to the comment
                 if (comments.get(name) == null) {
-                    comments.put(name, 1.0);
+                    comments.put(name, 1D);
                 } else {
                     comments.put(name, comments.get(name) + 1);
                 }
@@ -140,33 +144,52 @@ public class StatCollector {
             urlParameters = "&before_id=" + lastMessageID;
         }
 
-        // Calculate the like to comment ratios for everyone
-        Map<String, Double> ratios = new HashMap<String, Double>();
-        for (String name : comments.keySet()) {
-            Double numLikes = likes.get(name);
-            Double numComments = comments.get(name);
-            ratios.put(name, numLikes != null ? ((double) numLikes) / numComments : 0);
+        Map<String, Double> likesGivenByName = new HashMap<>();
+        for (Map.Entry<String, Double> entry : likesGiven.entrySet()) {
+            likesGivenByName.put(userIdToName.get(entry.getKey()), entry.getValue());
         }
 
-        likes = sortByValue(likes);
-        comments = sortByValue(comments);
-        ratios = sortByValue(ratios);
+        // Calculate the like to comment ratios for everyone
+        Map<String, Double> ratiosForLikesReceived = new HashMap<>();
+        for (String name : comments.keySet()) {
+            Double numLikes = likesReceived.get(name);
+            Double numComments = comments.get(name);
+            ratiosForLikesReceived.put(name, numLikes != null ? ((double) numLikes) / numComments : 0);
+        }
 
-        System.out.println("Likes: " + likes.toString());
-        System.out.println("Comments: " + comments.toString());
-        System.out.println("Ratios: " + ratios.toString());
+        Map<String, Double> ratioOfLikesGivenToLikesReceived = new HashMap<>();
+        for (String name : likesGivenByName.keySet()) {
+            Double selfLikesNullSafe = selfLikes.get(name) == null ? 0D : selfLikes.get(name);
+            Double numLikesReceived = likesReceived.get(name) - selfLikesNullSafe;
+            Double numLikesGiven = likesGivenByName.get(name);
+            ratioOfLikesGivenToLikesReceived.put(name, ((double) numLikesGiven) / numLikesReceived);
+        }
+
+        likesReceived = sortByValue(likesReceived);
+        comments = sortByValue(comments);
+        ratiosForLikesReceived = sortByValue(ratiosForLikesReceived);
+        likesGivenByName = sortByValue(likesGivenByName);
+        ratioOfLikesGivenToLikesReceived = sortByValue(ratioOfLikesGivenToLikesReceived);
+        selfLikes = sortByValue(selfLikes);
+
+        System.out.println("Total Comments: " + comments.toString());
+        System.out.println("Total Likes Received: " + likesReceived.toString());
+        System.out.println("Likes Received per Comment: " + ratiosForLikesReceived.toString());
+        System.out.println("Total Likes Given: " + likesGivenByName.toString());
+        System.out.println("Likes Given per Likes Received: " + ratioOfLikesGivenToLikesReceived.toString());
+        System.out.println("Self Likes: " + selfLikes.toString());
 
         System.out.println("\nProcessed " + totalMessages + " messages in "
                 + (System.currentTimeMillis() - startTime) / 1000 + " seconds");
 
-        postResults(comments, "\nTotal Comments:\n");
-        postResults(likes, "\nTotal Likes:\n");
-        postResults(ratios, "\nLikes per Comment:\n");
+        //postResults(comments, "\nTotal Comments:\n");
+        //postResults(likesReceived, "\nTotal Likes Received:\n");
+        //postResults(ratios, "\nLikes Received per Comment:\n");
+        //postResults(likesGivenByName, "\nTotal Likes Given:\n");
+        postResults(ratioOfLikesGivenToLikesReceived, "\nLikes Given per Likes Received (Minus Self Likes):\n");
+        postResults(selfLikes, "\nSelf Likes:\n");
     }
 
-    /**
-     * Takes in the hashmap with corresponding likes and posts it to the group
-     */
     private static void postResults(Map<String, Double> result, String headerLine) throws Exception {
         URL url = new URL("https://api.groupme.com/v3/bots/post");
         HttpsURLConnection httpConnection = (HttpsURLConnection) url.openConnection();
@@ -174,9 +197,9 @@ public class StatCollector {
         httpConnection.setRequestProperty("User-Agent", USER_AGENT);
         httpConnection.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
 
-        String formattedResult = headerLine;
+        StringBuilder formattedResult = new StringBuilder(headerLine);
         for (String name : result.keySet()) {
-            formattedResult += name + ": " + result.get(name) + "\n";
+            formattedResult.append(name).append(": ").append(result.get(name)).append("\n");
         }
 
         String urlParameters = "bot_id=" + BOT_ID + "&text=" + formattedResult;
@@ -197,18 +220,12 @@ public class StatCollector {
     /**
      * Taken from
      * http://stackoverflow.com/questions/109383/sort-a-mapkey-value-by-values-java
-     * @param map
-     * @return
      */
     private static <K, V extends Comparable<? super V>> Map<K, V> sortByValue(Map<K, V> map) {
-        List<Map.Entry<K, V>> list = new LinkedList<Map.Entry<K, V>>(map.entrySet());
-        Collections.sort(list, new Comparator<Map.Entry<K, V>>() {
-            public int compare(Map.Entry<K, V> o1, Map.Entry<K, V> o2) {
-                return (o2.getValue()).compareTo(o1.getValue());
-            }
-        });
+        List<Map.Entry<K, V>> list = new LinkedList<>(map.entrySet());
+        list.sort((o1, o2) -> (o2.getValue()).compareTo(o1.getValue()));
 
-        Map<K, V> result = new LinkedHashMap<K, V>();
+        Map<K, V> result = new LinkedHashMap<>();
         for (Map.Entry<K, V> entry : list) {
             result.put(entry.getKey(), entry.getValue());
         }
